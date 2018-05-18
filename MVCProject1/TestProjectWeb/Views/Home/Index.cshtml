@@ -1,0 +1,217 @@
+﻿@{
+    ViewBag.Title = "抽样方案";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+        div {
+            padding: 2px;
+        }
+    </style>
+
+<div>
+    <div>
+        <div>批量: </div>
+        <div>
+            <input type="text" id="txtQuantity" style="width: 200px;" autocomplete="off" />
+        </div>
+    </div>
+    <div>
+        <div>指定检验水平: </div>
+        <div>
+            <select id="drpLevel" style="width: 200px;">
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <div>确定抽样方案: </div>
+        <div>
+            <select id="drpSolution" style="width: 200px;">
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <div>接收质量限: </div>
+        <div>
+            <select id="drpQualityAmount" style="width: 200px;">
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <div></div>
+        <div>
+            <input type="button" id="btnCalculate" value="计算" />&nbsp;&nbsp;<input type="button" id="btnClear" value="清空" />
+        </div>
+    </div>
+
+    <div>
+        <div>结果: </div>
+        <div>
+            <textarea id="txtResult" cols="40" rows="8"></textarea>
+        </div>
+    </div>
+</div>
+
+<script src="~/Scripts/jquery-1.8.2.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+
+    $(document).ready(function () {
+
+        $('#drpSolution').append('<option value="" >-请选择-</option>');
+        $.each(GBT2828Helper.solutions, function (index, value) {
+            $('#drpSolution').append('<option value="' + value + '" >' + value + '</option>');
+        });
+
+        $('#drpLevel').append('<option value="" >-请选择-</option>');
+        $.each(GBT2828Helper.levels, function (index, value) {
+            $('#drpLevel').append('<option value="' + value + '" >' + value + '</option>');
+        });
+
+        $('#drpQualityAmount').append('<option value="" >-请选择-</option>');
+        $.each(GBT2828Helper.quanlityAmounts, function (index, value) {
+            $('#drpQualityAmount').append('<option value="' + value + '" >' + value + '</option>');
+        });
+
+        $('#btnCalculate').bind("click", function () { GBT2828Helper.calculate() });
+
+        $('#btnClear').bind("click", function () { GBT2828Helper.clear(); });
+    });
+
+    var GBT2828Helper = {
+        // 指定检验水平
+        levels: ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"],
+
+        // 确定抽样方案
+        solutions: ["正常1次", "加严1次", "放宽1次",
+           "正常2次", "加严2次", "放宽2次",
+           "正常5次", "加严5次", "放宽5次"],
+
+        // 接收质量限
+        quanlityAmounts: ["0.010", "0.015", "0.025", "0.040", "0.065",
+           "0.10", "0.15", "0.25", "0.40", "0.65",
+           "1.0", "1.5", "2.5", "4.0", "6.5",
+           "10", "15", "25", "40", "65",
+           "100", "150", "250", "400", "650",
+           "1000"],
+
+        // 条件完整性验证
+        validate: function () {
+            var errors = [];
+
+            var quantity = $("#txtQuantity").val();
+            var level = $("#drpLevel").val();
+            var solution = $("#drpSolution").val();
+            var quality = $("#drpQualityAmount").val();
+
+            if (quantity == "") {
+                errors.push("请输入\"批量\"");
+            } else {
+                if (isNaN(quantity)) {
+                    errors.push("\"批量\"字段请输入数字");
+                }
+                else {
+                    if (parseInt(quantity) <= 0) {
+                        errors.push("\"批量\"字段请输入大于0的数字");
+                    }
+                }
+            }
+
+            if (level == "") {
+                errors.push("请选择\"指定检验水平\"");
+            }
+
+            if (solution == "") {
+                errors.push("请选择\"确定抽样方案\"");
+            }
+
+            if (quality == "") {
+                errors.push("请选择\"接收质量限\"");
+            }
+
+            if (errors.length > 0) {
+                alert(errors.join("\r\n"));
+                return false;
+            }
+
+            return true;
+        },
+
+        // 计算
+        calculate: function () {
+            $("#txtResult").html("");
+
+            if (this.validate() == false) {
+                return;
+            }
+
+            var quantity = $("#txtQuantity").val();
+            var level = $("#drpLevel").val();
+            var solution = $("#drpSolution").val();
+            var quality = $("#drpQualityAmount").val();
+
+            // AJAX请求
+            $.ajax({
+                type: "post",
+                url: "/Home/Calculate",
+                //async: false,
+                data: { quantity: quantity, level: level, solution: solution, quality: quality },
+                dataType: "json",
+                success: function (data) {
+                    if (data == "") {
+                        $("#txtResult").html("未获取到数据，请查看异常。");
+                    } else {
+                        if (GBT2828Helper.validateJSONString(data)) {  // 显示结果
+                            var result = JSON.stringify(JSON.parse(data), null, 4)
+                            $("#txtResult").html(result);
+                        }
+                        else { // 显示错误
+                            $("#txtResult").html(data);
+                        }
+                    }
+                    GBT2828Helper.updateElementStatus(false);  // 页面禁用
+                },
+                error: function (request) {
+                    console.log(request.responseText);
+                    GBT2828Helper.updateElementStatus(false);  // 页面禁用
+                }
+            });
+
+            $("#txtResult").html("计算中...");
+            this.updateElementStatus(true);  // 页面启用
+        },
+
+        // 清空选项值
+        clear: function () {
+            var elements = [$("#txtQuantity"), $("#drpLevel"), $("#drpSolution"), $("#drpQualityAmount")];
+
+            $.each(elements, function (index, element) {
+                element.val("");
+            });
+        },
+
+        // 计算过程中禁用/启用页面元素
+        updateElementStatus: function (status) {
+            var elements = [$("#txtQuantity"), $("#drpLevel"), $("#drpSolution"), $("#drpQualityAmount"), $('#btnCalculate'), $('#btnClear')];
+
+            $.each(elements, function (index, element) {
+                element.attr("disabled", status);
+            });
+        },
+
+        // 验证JSON字符串是否标准
+        validateJSONString: function (str) {
+            try {
+                JSON.parse(str);
+            } catch (e) {
+                return false;
+            }
+            return true;
+        }
+    };
+
+   
+</script>
